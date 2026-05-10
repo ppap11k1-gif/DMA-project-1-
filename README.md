@@ -1,27 +1,42 @@
-# 📚 Q&A 커뮤니티 데이터베이스 설계 및 구현
-> **서울대학교 데이터관리와 분석(406.426B) Project 1**
+# 📚 Q&A 커뮤니티 데이터베이스 시스템 설계 및 구현
+> **데이터 모델링부터 데이터 무결성 검증 및 MySQL 물리 스키마 구현까지**
 
-온라인 Q&A 커뮤니티의 요구사항을 분석하여 9개의 엔티티와 16개의 관계를 가진 관계형 데이터베이스를 설계하고, MySQL을 통해 대용량 데이터를 처리할 수 있도록 구현한 프로젝트입니다.
+본 프로젝트는 대규모 사용자가 활동하는 **온라인 Q&A 커뮤니티(Stack Overflow 스타일)**의 비즈니스 로직을 분석하여, 확장 가능하고 무결성이 엄격히 보장된 관계형 데이터베이스(RDB)를 설계하고 구축한 과정을 담고 있습니다.
 
-## 📊 ER Diagram
-> 깃허브 Mermaid 라이브러리를 활용한 DB 구조 시각화입니다.
+## 🎯 프로젝트 배경 및 도메인 분석 (Project Domain)
+요구사항 명세서 없이도 시스템의 구조를 이해할 수 있도록 핵심 비즈니스 로직을 다음과 같이 정의하고 설계를 진행했습니다.
 
-```mermaid
-erDiagram
-    USERS ||--o{ POSTS : writes
-    USERS ||--o{ COMMENTS : "writes comment"
-    USERS ||--o{ VOTES : "votes by"
-    USERS ||--o{ BADGES : "has badges"
-    USERS ||--o{ POSTHISTORY : "performed by"
-    
-    POSTS ||--|| QUESTION : is_question
-    POSTS ||--|| ANSWER : is_answer
-    POSTS ||--o{ COMMENTS : "has comment"
-    POSTS ||--o{ VOTES : "has_votes"
-    POSTS ||--o{ POSTHISTORY : "has history"
-    POSTS ||--o{ POSTLINKS : "post links"
-    
-    QUESTION ||--o| ANSWER : "accepted answer"
-    QUESTION ||--o{ ANSWER : has
-    
-    POSTS ||--o| TAGS : "has excerpt/wiki"
+### 1. 게시물 중심의 계층 구조 (Hierarchical Content)
+* **게시물의 다형성:** 모든 게시글은 작성자, 작성일 등 공통 속성을 공유하지만, 로직상 '질문(Question)'과 '답변(Answer)'으로 엄격히 구분됩니다.
+* **Q&A 매핑:** 하나의 질문에는 여러 답변이 달릴 수 있으며(1:N), 그중 단 하나만이 '채택된 답변(Accepted Answer)'으로 지정되는 특수 관계를 가집니다.
+
+### 2. 사용자 인터랙션 및 이력 관리
+* **피드백 시스템:** 사용자의 투표(Votes), 댓글(Comments), 뱃지(Badges) 획득 데이터를 통해 플랫폼 내 신뢰도를 관리합니다.
+* **추적성 확보:** 게시글 수정 시 '수정 이력(PostHistory)'을 기록하고, 게시물 간의 연관성(중복/관련 질문)을 'PostLinks' 재귀적 관계로 추적합니다.
+
+## 🛠️ 주요 수행 내용 및 기술적 의사결정
+
+### 1. 고도화된 데이터 모델링 (Conceptual Design)
+* **상호 배타적 전문화(Disjoint Specialization) 해결:**
+  * 게시물이 '질문'인 동시에 '답변'일 수 없는 제약을 해결하기 위해, 슈퍼타입(Posts)과 서브타입(Question/Answer) 간의 **1:1 배타적 관계**를 설계하여 데이터 무결성을 강제했습니다.
+* **관계 모델 최적화 (Entity to Relationship):**
+  * 초기 독립 엔티티로 검토했던 `PostLinks`를 분석하여, 게시물 엔티티 간의 **재귀적 관계(Recursive Relationship)**로 변환함으로써 불필요한 테이블 조인을 방지하고 모델을 간소화했습니다.
+
+### 2. 데이터 무결성 검증 및 정제 (Data Engineering)
+* **중복 데이터 식별 및 원인 분석:**
+  * DB에 적재된 데이터와 원본(Raw) 데이터를 정밀 비교하여 **1,727건의 중복 레코드**를 캐치했습니다.
+  * 분석 결과, **외래 키(FK)와 기본 키(PK)의 조합으로 복합 키(Composite PK)를 구성하더라도 유일성을 보장할 수 없는 구조적 문제**를 식별했습니다.
+* **체계적인 데이터 가지치기(Data Pruning):**
+  * 식별된 중복 데이터를 단순히 삭제하는 것이 아니라, 비즈니스 로직상 유효한 레코드만 남기는 **체계적인 가지치기** 과정을 거쳐 데이터의 신뢰성을 확보했습니다.
+* **효율적 적재 전략:**
+  * 대용량 데이터 삽입 시 발생하는 참조 충돌을 방지하기 위해 **[스키마 생성 → 데이터 일괄 삽입 → 외래 키 제약조건 사후 적용]** 프로세스를 구축했습니다.
+
+## ⚙️ 기술 스택
+- **Database:** MySQL (Relational Schema Design)
+- **Language:** Python 3.x (Data Engineering)
+- **Library:** `Pandas` (ETL/Data Cleansing), `mysql-connector-python` (DB Interface)
+
+## 📂 저장소 구조
+- `DMA_project1_team15_report.pdf`: 도메인 분석, ERD 도식화, 최종 스키마 명세 상세 보고서
+- `DMA_project1_team15_summary.pdf`: 프로젝트 핵심 아키텍처 및 구현 결과 요약 발표 자료
+- *(※ 보안 및 저작권 정책에 따라 원본 데이터셋(CSV)과 외부 요구사항 명세서는 포함하지 않았습니다.)*
